@@ -9,44 +9,13 @@
 |******************************************************************************|
 |                                                                              |
 |     File:     Robot.java                                                     |
-|     Type:     Tele-op                                                        |
+|     Type:     Tester                                                         |
 |     Version:  100 (1.0.0)                                                    |
 |                                                                              |
 |     Author:   Michael Pate                                                   |
-|     Date:     January 22, 2019                                               |
+|     Date:     February 6, 2019                                               |
 |     Team:     1303, WYOHAZARD                                                |
 |     Host:     Casper College, ROBO 1616                                      |
-|                                                                              |
-|     Description:                                                             |
-|         This is the first official rendition of the robotic teleop program   |
-|         for the 2019/20 FIRST FRC season. In brief, this teleop includes     |
-|         control over the chassis and its mechanism along with simple         |
-|         diagnostics reporting.                                               |
-|                                                                              |
-|     Robot Details and Electrical Specifications:                             |
-|         Drivetrain:                                                          |
-|            -4x4 mecanum wheelbase, standard CIM motor and CIMPLE box drive   |
-|            -SPARK motor controllers, using PWM protocol                      |
-|         Mechanism:                                                           |
-|            -CIM motor w/ custom gearbox assy. for mech. lift                 |
-|            -CIM motor w/out gearing for mech. actuation                      |
-|            -Multiple small pnuematic cylinders for mech. actuation           |
-|            -Multiple large pnuematic cylinders for chassis lift              |
-|         Support:                                                             |
-|            -Pnuematic system                                                 |
-|                *** Includes compressor, tanks, regulation, etc. ***          |
-|            -Standard 12 volt sealed lead acid battery                        |
-|            -SPARK motor controllers w/ PWM protocol for all motors           |
-|            -Standard NI RoboRIO for main control                             |
-|            -Inline fuses on all sensetive components                         |
-|                *** RoboRIO, WiFi radio, etc. ***                             |
-|         Environment / Sensors:                                               |
-|            -Dual Logitech USB cameras, 720p @ 30fps                          |
-|            -Multiple IR based analog distance sensors                        |
-|            -Digital pnuematic air pressure detection                         |
-|            -Analog temperature detection                                     |
-|                *** motor ctrls., RoboRIO, compressor, cabin, etc. ***        |
-|            -Limit switches where appropriate                                 |
 |                                                                              |
 |     Notes:                                                                   |
 |         All softwares, utilities, and firmwares are provided by FIRST and    |
@@ -61,8 +30,8 @@ package frc.robot;
 import java.text.DecimalFormat;
 
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PWMTalonSRX;
 import edu.wpi.first.wpilibj.TimedRobot;
-import edu.wpi.first.wpilibj.PWMVictorSPX;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -99,10 +68,20 @@ public class Robot extends TimedRobot {
     private final int PORT_MFR = 1;
     private final int PORT_MRL = 2;
     private final int PORT_MRR = 3;
-    private final PWMVictorSPX chassisMotor_fl = new PWMVictorSPX(PORT_MFL);
-    private final PWMVictorSPX chassisMotor_fr = new PWMVictorSPX(PORT_MFR);
-    private final PWMVictorSPX chassisMotor_rl = new PWMVictorSPX(PORT_MRL);
-    private final PWMVictorSPX chassisMotor_rr = new PWMVictorSPX(PORT_MRR);
+    private final PWMTalonSRX chassisMotor_fl = new PWMTalonSRX(PORT_MFL);
+    private final PWMTalonSRX chassisMotor_fr = new PWMTalonSRX(PORT_MFR);
+    private final PWMTalonSRX chassisMotor_rl = new PWMTalonSRX(PORT_MRL);
+    private final PWMTalonSRX chassisMotor_rr = new PWMTalonSRX(PORT_MRR);
+
+    private final int PORT_MECHSTICK = 1;
+    private final Joystick mechStick = new Joystick(PORT_MECHSTICK);
+
+    private final int PORT_FORKL = 4;
+    private final int PORT_FORKR = 5;
+    private final int PORT_WINCH = 6;
+    private final PWMTalonSRX mechMotor_leftFork = new PWMTalonSRX(PORT_FORKL);
+    private final PWMTalonSRX mechMotor_rightFork = new PWMTalonSRX(PORT_FORKR);
+    private final PWMTalonSRX mechMotor_winch = new PWMTalonSRX(PORT_WINCH);
 
     ////////////////////////////////////////////////////////////////////////////
     //      Pre-included methods below.                                       //
@@ -181,6 +160,8 @@ public class Robot extends TimedRobot {
         // This method handles everything chassis drive based, so nothing else needed.
         chassisDrive(LIMIT_TELEOPFORWARD, LIMIT_TELEOPREVERSE, useDiagnostics);
 
+        mechDrive(useDiagnostics);
+
         //TODO: Finish teleopPeriodic()
     }
 
@@ -196,7 +177,7 @@ public class Robot extends TimedRobot {
         // Test run the chassis, and force diagnostics
         chassisDrive(LIMIT_TESTFORWARD, LIMIT_TESTREVERSE, true);
 
-        //TODO: for testPeriodic, copy teleopPeriodic but force diagnostics when possible.
+        mechDrive(true);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -241,14 +222,12 @@ public class Robot extends TimedRobot {
         powerRr = eqA + (lt - rt);
         powerFr = eqB + (lt - rt);
         powerRl = eqB + (rt - lt);
-        //TODO: Apply rotation from the triggers for the chassisDrive() method.
 
         // Step 4: Map the computed values to be within the power limits.
         powerFl = map(powerFl, -1.2, 1.2 + Math.ceil(rt - lt), reverseLimit, forwardLimit);
         powerFr = map(powerFr, -1.2, 1.2 + Math.ceil(lt - rt), reverseLimit, forwardLimit);
         powerRl = map(powerRl, -1.2, 1.2 + Math.ceil(lt - rt), reverseLimit, forwardLimit);
         powerRr = map(powerRr, -1.2, 1.2 + Math.ceil(rt - lt), reverseLimit, forwardLimit);
-        //TODO: Either the map limits or the power limits will need to be changed based on trigger input.
 
         // Step 5: Apply the powers to the motors, remember that left side motors are reversed.
         chassisMotor_fl.setSpeed(-powerFl);
@@ -269,6 +248,56 @@ public class Robot extends TimedRobot {
         }
 
         return;
+    }
+
+    /**
+     * Handles the driving of the mechanism.
+     * @param diagnostics Whether or not to include diagnostic info on DS
+     */
+    private void mechDrive(boolean diagnostics)
+    {
+        // Run the forks
+        double power = -mechStick.getY();
+
+        //TESTING ONLY
+        if (power < 0.1 && power > 0.0) power = 0.0;
+        if (power > 0.8) power =0.8;
+        if (power > -0.1 && power < 0.0) power = 0.0;
+        if (power < -0.8) power = -0.8;
+
+        mechMotor_leftFork.setSpeed(-power);
+        mechMotor_rightFork.setSpeed(power);
+
+
+        // Run the winch
+        double winchPower = mechStick.getPOV();
+
+        // Check the dpad's degree
+        if (winchPower == 0)
+        {
+          // 0 degrees is up...
+          winchPower = 1.0;
+        } 
+        else if (winchPower == 180)
+        {
+          // 180 degrees is down...
+          winchPower = -1.0;
+        }
+        else {
+          // For safety
+          winchPower = 0.0;
+        }
+
+        mechMotor_winch.setSpeed(winchPower);
+
+
+        if (diagnostics)
+        {
+          DecimalFormat df = new DecimalFormat("#.##");
+
+          SmartDashboard.putString("DB/String 5", "Forks: " + df.format(power));
+          SmartDashboard.putString("DB/String 6", "Winch: " + df.format(winchPower));
+        }
     }
 
     /**
